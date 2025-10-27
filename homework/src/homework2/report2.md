@@ -237,8 +237,8 @@ int main() {
 
 ## 效能分析
 
-1. 時間複雜度：程式的時間複雜度為 *Eval:O(t) Add:O(n+m) Mult:O((nm)^2) *。
-2. 空間複雜度：空間複雜度為 *Eval:O(1) Add:O(n+m) Mult:O((nm)) *。
+1. 時間複雜度：程式的時間複雜度為 *Eval:O(t) Add:O(n+m) Mult:O((nm)^2)*。
+2. 空間複雜度：空間複雜度為 *Eval:O(1) Add:O(n+m) Mult:O((nm))*。
 
 ## 測試與驗證
 
