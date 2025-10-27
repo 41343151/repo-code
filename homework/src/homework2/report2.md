@@ -229,50 +229,34 @@ int main() {
 ### 編譯與執行指令
 
 ```shell
-$ g++ -std=c++17 -O2 -o powerset powerset.cpp
-$ ./powerset
+$ g++ -std=c++17 -O2 -Wall Homework2.cpp -o hw2.exe
+$ .\hw2.exe=
 ```
 
 ### 結論
 
-1. 程式能正確計算當*m*跟*n*個別是多少時的答案。  
-2. 在*m*跟*n*都是*0*的情況下，程式會成功拋出異常，符合設計預期。  
-3. 測試案例涵蓋了多種邊界情況（*m = 0* *n = 2* || *m = 3* *n = 4* ），驗證程式的正確性。
+1. 程式能正確計算當*exp*跟*coef*個別是多少時的答案。  
+2. 在*exp*是*0*或*負數*的情況下，程式是否正確，符合設計預期。  
 
 ## 申論及開發報告
 
-### 選擇遞迴的原因
+### 選擇*friend*的原因
 
-在本程式中，使用遞迴來計算加減的主要原因如下：
+在本程式中，使用friend來寫這串*code*的主要原因如下：
 
-1. **程式邏輯簡單直觀**  
-   遞迴的寫法能夠清楚表達「將問題拆解為更小的子問題」的核心概念。  
-   例如，計算 *A(m-1,A(m,n-1)* 的過程可分解為：  
+1. **允許內部直接訪問私有資料**
+   在 Polynomial 的成員函式裡（例如 Eval()、normalize()）可以直接寫：  
+   s += termArray[i].coef * pow(x, termArray[i].exp); 
+   這是可行的，因為 Term 對 Polynomial 是 friend;沒有這行 friend 的話則會出現error。
+
+2. **好處**  
+   Polynomial 是唯一能操作 Term 內部的類別。
+   外部（例如 main()）不能直接動 coef 或 exp，防止亂改資料。
+   
+3. **沒有使用friend的情況**  
+   因Term的私有資料無法被Polynomial使用，所以coef和exp會是pritave。
+   程式碼會變得更長一串、更消耗效能、記憶體之類的。
+   因為少了friend就代表不能直接存取，需要跑好幾個流程才可以存取。
+   所以程式執行的時間一旦長起來，消耗的東西就會增長。
 
    
-   <img width="660" height="166" alt="image" src="https://github.com/user-attachments/assets/5fd096a4-3a6a-4331-a8ea-ce26ca59289a" />
-   
-
-
-  當*m*=0 時，直接輸出*n+1*的質。
-
-2. **易於理解與實現**  
-   遞迴的程式碼更接近數學公式的表示方式，特別適合新手學習遞迴的基本概念。  
-   以本程式為例：  
-
-   ```cpp
-   int Ackermann(const int m,const int n){
-    if(m==0)
-    return n+1;
-    else if(n==0)
-    return Ackermann(m-1,1);
-    else
-    return Ackermann(m-1,Ackermann(m,n-1));
-    }
-   ```
-
-3. **遞迴的語意清楚**  
-   在程式中，每次遞迴呼叫都代表一個「子問題的解」，而最終遞迴的返回結果會逐層相加，完成整體問題的求解。  
-   這種設計簡化了邏輯，不需要額外變數來維護中間狀態。
-   透過遞迴實作簡單的加減計算，程式邏輯簡單且易於理解，特別適合展示遞迴的核心思想。然而，遞迴會因堆疊深度受到限制，當 $n$ 值過大時，應考慮使用迭代版本來避免 Stack Overflow 問題。
-
