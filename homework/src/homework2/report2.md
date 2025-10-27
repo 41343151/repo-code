@@ -1,16 +1,15 @@
 
 # 41343151
 
-作業一
-第一題
+作業二
 ## 解題說明
 
-本題要求實現一個阿克曼函數，阿克曼函數是非原始遞迴函數的例子，它需要兩個自然數作為輸入值，輸出一個自然數。
+本題要求設計一個多項式類別的類別介面與基本運算功能。
 
 ### 解題策略
 
-1. 當m==0 時，作為遞迴的結束條件。  
-2. 主程式呼叫遞迴函式，並輸出計算結果。
+1. 定義 Term 儲存係數與指數，Polynomial 用動態陣列管理多項式項目。  
+2. 以 operator+、operator* 完成多項式加法與乘法，用 Eval() 計算多項式值。
 
 ## 程式實作
 
@@ -18,42 +17,214 @@
 
 ```cpp
 #include <iostream>
+#include <algorithm>
+#include <cmath>
 using namespace std;
 
-int Ackermann(const int m,const int n){
-    if(m==0)
-    return n+1;
-    else if(n==0)
-    return Ackermann(m-1,1);
-    else
-    return Ackermann(m-1,Ackermann(m,n-1));
+class Polynomial; // forward
+
+class Term {
+    friend class Polynomial;
+    friend ostream& operator<<(ostrcam& os , const Polynomial& p);
+private:
+    float coef; // 係數
+    int   exp;  // 指數
+};
+
+class Polynomial {
+public:
+    // 建構/拷貝/指定/解構
+    explicit Polynomial(int cap = 4) : capacity(max(1, cap)), terms(0) {
+        termArray = new Term[capacity];
+    }
+    Polynomial(const Polynomial& rhs) : capacity(rhs.capacity), terms(rhs.terms) {
+        termArray = new Term[capacity];
+        std::copy(rhs.termArray, rhs.termArray + terms, termArray);
+    }
+    Polynomial& operator=(const Polynomial& rhs) {
+        if (this == &rhs) return *this;
+        Term* na = new Term[rhs.capacity];
+        std::copy(rhs.termArray, rhs.termArray + rhs.terms, na);
+        delete[] termArray;
+        termArray = na;
+        capacity  = rhs.capacity;
+        terms     = rhs.terms;
+        return *this;
+    }
+    ~Polynomial() { delete[] termArray; }
+
+    // 給 >> 使用：把 (exp, coef) 加進陣列（會自動合併同 exp）
+    void setTerm(int exp, float coef) { addInPlace(exp, coef); normalize(); }
+
+    // 求值
+    float Eval(float x) const {
+        float s = 0.0f;
+        for (int i = 0; i < terms; ++i)
+            s += termArray[i].coef * std::pow(x, termArray[i].exp);
+        return s;
+    }
+
+    // ---- 友元運算子（非成員）----
+    friend istream& operator>>(istream& is, Polynomial& p);
+    friend ostream& operator<<(ostream& os, const Polynomial& p);
+    friend Polynomial operator+(const Polynomial& a, const Polynomial& b);
+    friend Polynomial operator*(const Polynomial& a, const Polynomial& b);
+
+private:
+    // 內部資料
+    Term* termArray; // 非零項陣列
+    int   capacity;  // 陣列容量
+    int   terms;     // 已用項數
+
+    // 小工具
+    void ensureCapacity(int need) {
+        if (need <= capacity) return;
+        int nc = max(need, capacity * 2);
+        Term* na = new Term[nc];
+        std::copy(termArray, termArray + terms, na);
+        delete[] termArray;
+        termArray = na;
+        capacity  = nc;
+    }
+    void append(int exp, float coef) { // 未必合併、未必排序
+        if (std::fabs(coef) == 0.0f) return;
+        ensureCapacity(terms + 1);
+        termArray[terms++] = Term{coef, exp};
+    }
+    void addInPlace(int exp, float coef) { // 對既有 exp 累加
+        if (std::fabs(coef) == 0.0f) return;
+        for (int i = 0; i < terms; ++i) {
+            if (termArray[i].exp == exp) {
+                termArray[i].coef += coef;
+                if (std::fabs(termArray[i].coef) == 0.0f) {
+                    for (int k = i + 1; k < terms; ++k) termArray[k - 1] = termArray[k];
+                    --terms;
+                }
+                return;
+            }
+        }
+        append(exp, coef);
+    }
+    void normalize() { // 依 exp 大到小排序、合併、去 0
+        if (terms <= 1) return;
+        sort(termArray, termArray + terms,
+            [](const Term& A, const Term& B){ return A.exp > B.exp; });
+        int w = 0;
+        for (int i = 0; i < terms; ) {
+            int   e = termArray[i].exp;
+            float c = 0.0f;
+            while (i < terms && termArray[i].exp == e) c += termArray[i++].coef;
+            if (std::fabs(c) > 0.0f) termArray[w++] = Term{c, e};
+        }
+        terms = w;
+    }
+};
+
+// ---- friend operators 的定義 ----
+
+// 輸入格式：先 n，接著 n 組 (exp coef)
+// 例如：3  4 3  2 2  0 1  代表 3x^4 + 2x^2 + 1
+istream& operator>>(istream& is, Polynomial& p) {
+    int n;
+    if (!(is >> n)) return is;
+    Polynomial tmp(n + 4);
+    for (int i = 0; i < n; ++i) {
+        int e; float c;
+        is >> e >> c;
+        tmp.addInPlace(e, c);
+    }
+    tmp.normalize();
+    p = tmp; // 使用拷貝指定
+    return is;
 }
 
-int main(){
-    int m,n;
-    cout<<"輸入A(m,n) ";
-    cin>>m>>n;
-    cout<<"A("<<m<<","<<n<<")="<<Ackermann(m,n)<<endl;
+// 以數學友善的格式輸出（省略 1*x、處理 ±）
+ostream& operator<<(ostream& os, const Polynomial& p) {
+    if (p.terms == 0) { os << "0"; return os; }
+    for (int i = 0; i < p.terms; ++i) {
+        float c = p.termArray[i].coef;
+        int   e = p.termArray[i].exp;
+
+        if (i > 0) os << (c >= 0 ? " + " : " - ");
+        else if (c < 0) os << "-";
+
+        float ac = std::fabs(c);
+        bool printCoef = !(ac == 1.0f && e != 0);
+        if (printCoef) os << ac;
+
+        if (e > 0) {
+            if (printCoef) os << "*";
+            os << "x";
+            if (e > 1) os << "^" << e;
+        }
+    }
+    return os;
+}
+
+// a + b：以 merge 方式合併（兩者皆視為已 normalize）Polyonmial add
+Polynomial operator+(const Polynomial& a, const Polynomial& b) {
+    Polynomial r(max(a.capacity, b.capacity));
+    int i = 0, j = 0;
+    while (i < a.terms || j < b.terms) {
+        if (j == b.terms || (i < a.terms && a.termArray[i].exp > b.termArray[j].exp))
+            r.append(a.termArray[i].exp, a.termArray[i++].coef);
+        else if (i == a.terms || b.termArray[j].exp > a.termArray[i].exp)
+            r.append(b.termArray[j].exp, b.termArray[j++].coef);
+        else {
+            float c = a.termArray[i].coef + b.termArray[j].coef;
+            if (std::fabs(c) > 0.0f) r.append(a.termArray[i].exp, c);
+            ++i; ++j;
+        }
+    }
+    r.normalize();
+    return r;
+}
+
+// a * b：逐項相乘再合併 Polynomial mult
+Polynomial operator*(const Polynomial& a, const Polynomial& b) {
+    Polynomial r(a.terms + b.terms + 4);
+    for (int i = 0; i < a.terms; ++i)
+        for (int j = 0; j < b.terms; ++j)
+            r.addInPlace(a.termArray[i].exp + b.termArray[j].exp,
+                         a.termArray[i].coef * b.termArray[j].coef);
+    r.normalize();
+    return r;
+}
+
+// ---- 示範 ----
+int main() {
+    cout << "請輸入多項式 p 的項數與 (exp coef)：\n";
+    Polynomial p; cin >> p;
+    cout << "請輸入多項式 q 的項數與 (exp coef)：\n";
+    Polynomial q; cin >> q;
+
+    cout << "p(x) = " << p << "\n";
+    cout << "q(x) = " << q << "\n";
+
+    cout << "p(x) + q(x) = " << (p + q) << "\n";
+    cout << "p(x) * q(x) = " << (p * q) << "\n";
+    cout << "p(2) = " << p.Eval(2.0f) << "\n";
     return 0;
 }
+
 ```
 
 ## 效能分析
 
-1. 時間複雜度：程式的時間複雜度為 *O(A(m,n))*。
-2. 空間複雜度：空間複雜度為 *O(A(m,n))*。
+1. 時間複雜度：程式的時間複雜度為 *Eval:O(t) Add:O(n+m) Mult:O((nm)^2) *。
+2. 空間複雜度：空間複雜度為 *Eval:O(1) Add:O(n+m) Mult:O((nm)) *。
 
 ## 測試與驗證
 
 ### 測試案例
 
-| 測試案例 | 輸入參數 *m* | 輸入參數 *n* | 預期輸出 | 實際輸出 |
-|----------|--------------|----------|----------|----------|
-| 測試一   | *m = 0*      | *n = 2*        | 3        | 3        |
-| 測試二   | *m = 2*      | *n = 0*        | 3        | 3        |
-| 測試三   | *m = 3*      | *n = 4*        | 125      | 125      |
-| 測試四   | *m = 2*      | *n = 3*        | 9        | 9        |
-| 測試五   | *m = 0*      | *n = 0*        | 拋出異常        | 拋出異常        |
+<img width="392" height="156" alt="image" src="https://github.com/user-attachments/assets/a444156d-fe6d-4ae9-b4b7-18cc2f015b3b" />
+
+<img width="595" height="156" alt="image" src="https://github.com/user-attachments/assets/c40ff859-b5e0-459e-9803-2ebb83c43db9" />
+
+<img width="432" height="152" alt="image" src="https://github.com/user-attachments/assets/d5562730-7d0b-4ba9-88d1-d3571196fa34" />
+
+
 
 ### 編譯與執行指令
 
@@ -105,134 +276,3 @@ $ ./powerset
    這種設計簡化了邏輯，不需要額外變數來維護中間狀態。
    透過遞迴實作簡單的加減計算，程式邏輯簡單且易於理解，特別適合展示遞迴的核心思想。然而，遞迴會因堆疊深度受到限制，當 $n$ 值過大時，應考慮使用迭代版本來避免 Stack Overflow 問題。
 
-作業一
-第二題
-## 解題說明
-
-本題要求我實現一個*遞迴函數（recursive function）*，用來計算某個集合 *S* 的 *power set（冪集合）*。
-
-### 解題策略
-
-1. 當集合為空時（即沒有元素可處理），回傳一個只包含空集合的結果 [[]]，作為遞迴的停止條件。  
-2. 主程式呼叫遞迴函式，並輸出其結果。
-
-## 程式實作
-
-以下為主要程式碼：
-
-```cpp
-#include <iostream>
-#include <vector>
-#include <string>
-using namespace std;
-
-void PowerSetRecursive(const vector<string> &S, int index, vector<string> &subset) {
-    if (index == (int)S.size()) {
-        
-        cout << "{";
-        for (size_t i = 0; i < subset.size(); ++i) {
-            cout << subset[i];
-            if (i + 1 < subset.size()) cout << ", ";
-        }
-        cout << "}" << endl;
-        return;
-    }
-    PowerSetRecursive(S, index + 1, subset);
-    subset.push_back(S[index]);
-    PowerSetRecursive(S, index + 1, subset);
-    subset.pop_back(); 
-}
-
-int main() {
-    cout << "=== Powerset (冪集) 遞迴產生程式 ===\n";
-    cout << "請輸入集合中元素個數 n：";
-
-    int n;
-    cin >> n;
-    if (n <= 0) {
-        cout << "n 必須大於 0！" << endl;
-        return 0;
-    }
-
-    vector<string> S(n);
-    cout << "請輸入集合的元素（以空白分隔）：";
-    for (int i = 0; i < n; ++i)
-        cin >> S[i];
-
-    cout << "\n集合 S = { ";
-    for (int i = 0; i < n; ++i) {
-        cout << S[i];
-        if (i + 1 < n) cout << ", ";
-    }
-    cout << " }\n\n";
-    cout << "S 的所有子集合如下（共 2^" << n << " = " << (1 << n) << " 個）：\n";
-
-    vector<string> subset;
-    PowerSetRecursive(S, 0, subset);
-
-    return 0;
-}
- 
-```
-
-## 效能分析
-
-1. 時間複雜度：程式的時間複雜度為 *O(n*2^2)*。
-2. 空間複雜度：空間複雜度為 *O(2^n)*。
-
-## 測試與驗證
-
-### 測試案例
-
-| 測試案例 | 輸入參數 *n* 元素| 預期輸出 | 實際輸出 ||
-|----------|--------------|----------|----------|----------|
-| 測試一   | *n=3*   a b c   | {} {c}{b} {b, c} {a} {a, c} {a, b} {a, b, c}        | {} {c}{b} {b, c} {a} {a, c} {a, b} {a, b, c}        |
-| 測試二   | *n=2*    a b  | {} {b} {a} {a, b}        | {} {b} {a} {a, b}        |
-| 測試三   | *n=1*     a  | {} {a}      | {} {a}      |
-### 編譯與執行指令
-
-```shell
-$ g++ powerset.cpp -o powerset
-$ ./powerset
-```
-
-### 結論
-
-1. 程式能正確列出集合中所有子集合，並在不同輸入大小下皆可正常運作。在集合為空的情況下，程式正確回傳僅包含空集合的結果，符合遞迴設計的結束條件與預期行為。
-
-## 申論及開發報告
-
-### 選擇遞迴的原因
-
-本題使用遞迴的主要目的，是為了系統性地列出集合中所有可能的子集合組合。
-
-1. **程式邏輯簡單直觀**  
-   程式邏輯簡單直觀，運作方式清楚明瞭。
-   
-
-2. **易於理解與實現**  
-   易於理解與實現，能以簡潔的遞迴結構生成所有子集合。
-   以本程式為例：  
-
-   ```cpp
-   void PowerSetRecursive(const vector<string> &S, int index, vector<string> &subset) {
-    if (index == (int)S.size()) {
-        
-        cout << "{";
-        for (size_t i = 0; i < subset.size(); ++i) {
-            cout << subset[i];
-            if (i + 1 < subset.size()) cout << ", ";
-        }
-        cout << "}" << endl;
-        return;
-    }
-    PowerSetRecursive(S, index + 1, subset);
-    subset.push_back(S[index]);
-    PowerSetRecursive(S, index + 1, subset);
-    subset.pop_back();
-   }
-   ```
-
-3. **遞迴的語意清楚**  
-   1.遞迴語意清楚，對應「包含或不包含元素」的二元選擇邏輯。
-   2.每一層遞迴皆有明確的結束條件與回傳結果，結構層次分明。
