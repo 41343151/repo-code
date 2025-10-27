@@ -16,6 +16,20 @@
 以下為主要程式碼：
 
 ```cpp
+/*
+class Polynomial{
+public:
+    Polynomial();
+    // Construct the polynomial p(x)=0
+    Polynomial Add(Polynomial poly);
+    // Return the sum of the polynomials this and poly
+    Polynomial Mult(Polynomial poly);
+    // Return the product of the polynomials this and poly
+    float Eval(float f);
+    // Evaluate the polynomial this at f and return the result
+};
+*/
+
 #include <iostream>
 #include <algorithm>
 #include <cmath>
@@ -25,16 +39,19 @@ class Polynomial; // forward
 
 class Term {
     friend class Polynomial;
-    friend ostream& operator<<(ostrcam& os , const Polynomial& p);
 private:
     float coef; // 係數
     int   exp;  // 指數
+    Term(float c = 0.0f, int e = 0) : coef(c), exp(e) {}
+public:
+    float getCoef() const { return coef; }
+    int   getExp()  const { return exp;  }
 };
 
 class Polynomial {
 public:
-    // 建構/拷貝/指定/解構
-    explicit Polynomial(int cap = 4) : capacity(max(1, cap)), terms(0) {
+    // 建構/解構/拷貝/指定
+    explicit Polynomial(int cap = 4) : capacity(std::max(1, cap)), terms(0) {
         termArray = new Term[capacity];
     }
     Polynomial(const Polynomial& rhs) : capacity(rhs.capacity), terms(rhs.terms) {
@@ -53,7 +70,7 @@ public:
     }
     ~Polynomial() { delete[] termArray; }
 
-    // 給 >> 使用：把 (exp, coef) 加進陣列（會自動合併同 exp）
+    // 設定單一項（自動合併同 exp）
     void setTerm(int exp, float coef) { addInPlace(exp, coef); normalize(); }
 
     // 求值
@@ -63,6 +80,10 @@ public:
             s += termArray[i].coef * std::pow(x, termArray[i].exp);
         return s;
     }
+
+    // 題目原型：提供成員 Add/Mult，內部轉呼叫運算子
+    Polynomial Add(const Polynomial& p)  const { return *this + p; }
+    Polynomial Mult(const Polynomial& p) const { return *this * p; }
 
     // ---- 友元運算子（非成員）----
     friend istream& operator>>(istream& is, Polynomial& p);
@@ -79,7 +100,7 @@ private:
     // 小工具
     void ensureCapacity(int need) {
         if (need <= capacity) return;
-        int nc = max(need, capacity * 2);
+        int nc = std::max(need, capacity * 2);
         Term* na = new Term[nc];
         std::copy(termArray, termArray + terms, na);
         delete[] termArray;
@@ -89,7 +110,8 @@ private:
     void append(int exp, float coef) { // 未必合併、未必排序
         if (std::fabs(coef) == 0.0f) return;
         ensureCapacity(terms + 1);
-        termArray[terms++] = Term{coef, exp};
+        termArray[terms] = Term(coef, exp);
+        ++terms;
     }
     void addInPlace(int exp, float coef) { // 對既有 exp 累加
         if (std::fabs(coef) == 0.0f) return;
@@ -107,14 +129,17 @@ private:
     }
     void normalize() { // 依 exp 大到小排序、合併、去 0
         if (terms <= 1) return;
-        sort(termArray, termArray + terms,
-            [](const Term& A, const Term& B){ return A.exp > B.exp; });
+        std::sort(termArray, termArray + terms,
+        [](const Term& A, const Term& B){ return A.getExp() > B.getExp(); });
         int w = 0;
         for (int i = 0; i < terms; ) {
-            int   e = termArray[i].exp;
+            int   e = termArray[i].getExp();
             float c = 0.0f;
-            while (i < terms && termArray[i].exp == e) c += termArray[i++].coef;
-            if (std::fabs(c) > 0.0f) termArray[w++] = Term{c, e};
+            while (i < terms && termArray[i].getExp() == e) c += termArray[i++].getCoef();
+            if (std::fabs(c) > 0.0f) {
+                termArray[w] = Term(c, e);
+                ++w;
+            }
         }
         terms = w;
     }
@@ -142,8 +167,8 @@ istream& operator>>(istream& is, Polynomial& p) {
 ostream& operator<<(ostream& os, const Polynomial& p) {
     if (p.terms == 0) { os << "0"; return os; }
     for (int i = 0; i < p.terms; ++i) {
-        float c = p.termArray[i].coef;
-        int   e = p.termArray[i].exp;
+        float c = p.termArray[i].getCoef();
+        int   e = p.termArray[i].getExp();
 
         if (i > 0) os << (c >= 0 ? " + " : " - ");
         else if (c < 0) os << "-";
@@ -161,18 +186,20 @@ ostream& operator<<(ostream& os, const Polynomial& p) {
     return os;
 }
 
-// a + b：以 merge 方式合併（兩者皆視為已 normalize）Polyonmial add
+// polynomial add
 Polynomial operator+(const Polynomial& a, const Polynomial& b) {
-    Polynomial r(max(a.capacity, b.capacity));
+    Polynomial r(std::max(a.capacity, b.capacity));
     int i = 0, j = 0;
     while (i < a.terms || j < b.terms) {
-        if (j == b.terms || (i < a.terms && a.termArray[i].exp > b.termArray[j].exp))
-            r.append(a.termArray[i].exp, a.termArray[i++].coef);
-        else if (i == a.terms || b.termArray[j].exp > a.termArray[i].exp)
-            r.append(b.termArray[j].exp, b.termArray[j++].coef);
-        else {
-            float c = a.termArray[i].coef + b.termArray[j].coef;
-            if (std::fabs(c) > 0.0f) r.append(a.termArray[i].exp, c);
+        if (j == b.terms || (i < a.terms && a.termArray[i].getExp() > b.termArray[j].getExp())) {
+            r.append(a.termArray[i].getExp(), a.termArray[i].getCoef());
+            ++i;
+        } else if (i == a.terms || b.termArray[j].getExp() > a.termArray[i].getExp()) {
+            r.append(b.termArray[j].getExp(), b.termArray[j].getCoef());
+            ++j;
+        } else {
+            float c = a.termArray[i].getCoef() + b.termArray[j].getCoef();
+            if (std::fabs(c) > 0.0f) r.append(a.termArray[i].getExp(), c);
             ++i; ++j;
         }
     }
@@ -180,18 +207,17 @@ Polynomial operator+(const Polynomial& a, const Polynomial& b) {
     return r;
 }
 
-// a * b：逐項相乘再合併 Polynomial mult
+// polynomial mult
 Polynomial operator*(const Polynomial& a, const Polynomial& b) {
     Polynomial r(a.terms + b.terms + 4);
     for (int i = 0; i < a.terms; ++i)
         for (int j = 0; j < b.terms; ++j)
-            r.addInPlace(a.termArray[i].exp + b.termArray[j].exp,
-                         a.termArray[i].coef * b.termArray[j].coef);
+            r.addInPlace(a.termArray[i].getExp() + b.termArray[j].getExp(),
+                         a.termArray[i].getCoef() * b.termArray[j].getCoef());
     r.normalize();
     return r;
 }
 
-// ---- 示範 ----
 int main() {
     cout << "請輸入多項式 p 的項數與 (exp coef)：\n";
     Polynomial p; cin >> p;
